@@ -2,6 +2,9 @@
 name = "netgap_demo"
 version = "0.1.0"
 edition = "2021"
+authors = ["zyyang90 <gemini90@126.com>"]
+description = "A simple demo for netgap"
 
 [dependencies]
 anyhow = "1.0.86"
+clap = { version = "4.5.9", features = ["derive"] }
