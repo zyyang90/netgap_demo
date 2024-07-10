@@ -120,7 +120,7 @@ fn server(opts: ServerOpts) -> anyhow::Result<()> {
 }
 
 fn handle_connection(opts: ServerOpts, mut stream: TcpStream) -> anyhow::Result<()> {
-    let mut buffer = [0u8; 1024];
+    let mut buffer = [0u8; 996];
 
     const OK: &[u8] = &[0b1111_1111u8];
     const FAIL: &[u8] = &[0b0000_0000u8];
