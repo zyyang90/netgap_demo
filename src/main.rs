@@ -20,18 +20,22 @@ enum SubCommand {
     Client(ClientOpts),
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 struct ServerOpts {
-    #[arg(short, long, default_value = "8899")]
+    #[arg(short, long, default_value_t = 8899)]
     port: u16,
+    #[arg(short, long, default_value_t = true)]
+    ack: bool,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 struct ClientOpts {
     #[arg(long)]
     host: String,
-    #[arg(short, long, default_value = "8899")]
+    #[arg(short, long, default_value_t = 8899)]
     port: u16,
+    #[arg(short, long, default_value_t = 10)]
+    count: u32,
 }
 
 fn main() {
@@ -54,9 +58,13 @@ fn client(opts: ClientOpts) -> anyhow::Result<()> {
 
             let msg = "Hello, server!";
 
-            for _ in 0..10 {
-                stream.write(msg.as_bytes()).unwrap();
-                stream.flush().unwrap();
+            for _ in 0..opts.count {
+                stream.write(msg.as_bytes()).map_err(|err| {
+                    anyhow::anyhow!("failed to write data to the server, cause: {}", err)
+                })?;
+                stream.flush().map_err(|err| {
+                    anyhow::anyhow!("failed to flush data to the server, cause: {}", err)
+                })?;
                 println!(">>> {}", msg);
 
                 thread::sleep(Duration::from_secs(1));
@@ -75,10 +83,16 @@ fn server(opts: ServerOpts) -> anyhow::Result<()> {
 
     for stream in listener.incoming() {
         let stream = stream.map_err(|err| anyhow::anyhow!("failed to get stream: {}", err))?;
-        println!("New connection: {}", stream.peer_addr().unwrap());
+        println!(
+            "New connection: {}",
+            stream
+                .peer_addr()
+                .map_err(|err| { anyhow::anyhow!("failed to get peer address: {}", err) })?
+        );
 
+        let opts = opts.clone();
         thread::spawn(move || {
-            handle_connection(stream);
+            handle_connection(opts, stream).unwrap();
         });
     }
 
@@ -87,7 +101,7 @@ fn server(opts: ServerOpts) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream) {
+fn handle_connection(opts: ServerOpts, mut stream: TcpStream) -> anyhow::Result<()> {
     let mut buffer = [0u8; 1024];
 
     const OK: &[u8] = &[0b1111_1111u8];
@@ -98,17 +112,27 @@ fn handle_connection(mut stream: TcpStream) {
             Ok(size) => {
                 if size == 0 {
                     println!("connection closed");
-                    std::process::exit(0);
+                    stream.shutdown(Shutdown::Both).map_err(|err| {
+                        anyhow::anyhow!("failed to shutdown the stream, cause: {:?}", err)
+                    })?;
                 }
 
                 let content = String::from_utf8_lossy(&buffer[..size]);
                 println!("received size: {}, content: {}", size, content);
-                // stream.write(&[OK]).unwrap();
+                if opts.ack {
+                    stream.write(OK).map_err(|err| {
+                        anyhow::anyhow!("failed to write data to the client, cause: {:?}", err)
+                    })?;
+                }
             }
             Err(err) => {
                 println!("failed to read data, cause: {:#?}", err);
-                // stream.write(&[FAIL]).unwrap();
-                stream.shutdown(Shutdown::Both).unwrap();
+                stream.write(FAIL).map_err(|err| {
+                    anyhow::anyhow!("failed to write data to the client, cause: {:?}", err)
+                })?;
+                stream.shutdown(Shutdown::Both).map_err(|err| {
+                    anyhow::anyhow!("failed to shutdown the stream, cause: {:?}", err)
+                })?;
             }
         }
     }
