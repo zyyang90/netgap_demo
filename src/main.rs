@@ -95,7 +95,7 @@ fn client(opts: ClientOpts) -> anyhow::Result<()> {
     Ok(())
 }
 fn server(opts: ServerOpts) -> anyhow::Result<()> {
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", opts.port))
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", opts.port))
         .map_err(|err| anyhow::anyhow!("failed to bind to address: {}", err))?;
     println!("Server started at 127.0.0.1:{}", opts.port);
 
