@@ -22,18 +22,23 @@ enum SubCommand {
 
 #[derive(Parser, Debug, Clone)]
 struct ServerOpts {
+    /// The port to listen
     #[arg(short, long, default_value_t = 8899)]
     port: u16,
-    #[arg(short, long, default_value_t = true)]
+    /// Whether to send ack to the client
+    #[arg(short, long)]
     ack: bool,
 }
 
 #[derive(Parser, Debug, Clone)]
 struct ClientOpts {
+    /// The host to connect
     #[arg(long)]
     host: String,
+    /// The port to connect
     #[arg(short, long, default_value_t = 8899)]
     port: u16,
+    /// The count of messages to send
     #[arg(short, long, default_value_t = 10)]
     count: u32,
 }
@@ -55,6 +60,9 @@ fn client(opts: ClientOpts) -> anyhow::Result<()> {
     match TcpStream::connect(format!("{}:{}", opts.host, opts.port)) {
         Ok(mut stream) => {
             println!("connected to the server: {}:{}", opts.host, opts.port);
+            stream
+                .set_read_timeout(Some(Duration::from_millis(10)))
+                .map_err(|err| anyhow::anyhow!("failed to set read timeout, cause: {}", err))?;
 
             let msg = "Hello, server!";
 
@@ -66,6 +74,16 @@ fn client(opts: ClientOpts) -> anyhow::Result<()> {
                     anyhow::anyhow!("failed to flush data to the server, cause: {}", err)
                 })?;
                 println!(">>> {}", msg);
+
+                let mut buffer = [0u8; 1];
+                match stream.read_exact(&mut buffer) {
+                    Ok(_) => {
+                        println!("<<< {:?}", buffer);
+                    }
+                    Err(err) => {
+                        println!("failed to read data from the server, cause: {:#?}", err);
+                    }
+                }
 
                 thread::sleep(Duration::from_secs(1));
             }
