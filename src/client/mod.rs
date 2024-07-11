@@ -3,6 +3,7 @@ use std::net::TcpStream;
 use std::thread;
 use std::time::Duration;
 
+use crate::Metrics;
 use clap::Parser;
 
 #[derive(Parser, Debug, Clone)]
@@ -78,14 +79,6 @@ pub fn run(opts: ClientOpts) -> anyhow::Result<()> {
     println!("=====================");
 
     Ok(())
-}
-
-#[derive(Debug)]
-struct Metrics {
-    total: usize,
-    success: usize,
-    failed: usize,
-    bytes: usize,
 }
 
 fn run_impl(opts: ClientOpts) -> anyhow::Result<Metrics> {

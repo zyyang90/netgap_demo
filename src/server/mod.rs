@@ -1,3 +1,4 @@
+use crate::Metrics;
 use clap::Parser;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -18,6 +19,8 @@ pub fn run(opts: ServerOpts) -> anyhow::Result<()> {
         .map_err(|err| anyhow::anyhow!("failed to bind to address: {}", err))?;
     println!("Server started at 127.0.0.1:{}", opts.port);
 
+    let mut threads = vec![];
+
     for stream in listener.incoming() {
         let stream = stream.map_err(|err| anyhow::anyhow!("failed to get stream: {}", err))?;
         println!(
@@ -28,11 +31,15 @@ pub fn run(opts: ServerOpts) -> anyhow::Result<()> {
         );
 
         let opts = opts.clone();
-        thread::spawn(move || {
-            handle_connection(opts, stream).unwrap();
+        let t = thread::spawn(move || {
+            handle_connection(opts, stream).expect("TODO: panic message");
         });
+        threads.push(t);
     }
 
+    for t in threads {
+        t.join().unwrap();
+    }
     drop(listener);
 
     Ok(())
@@ -44,6 +51,13 @@ fn handle_connection(opts: ServerOpts, mut stream: TcpStream) -> anyhow::Result<
     const OK: &[u8] = &[0b1111_1111u8];
     const FAIL: &[u8] = &[0b0000_0000u8];
 
+    let mut metrics = Metrics {
+        total: 0,
+        success: 0,
+        failed: 0,
+        bytes: 0,
+    };
+
     loop {
         match stream.read(&mut buffer) {
             Ok(size) => {
@@ -54,8 +68,10 @@ fn handle_connection(opts: ServerOpts, mut stream: TcpStream) -> anyhow::Result<
                     })?;
                 }
 
-                let content = String::from_utf8_lossy(&buffer[..size]);
-                println!("received size: {}, content: {}", size, content);
+                let _ = String::from_utf8_lossy(&buffer[..size]);
+                metrics.bytes += size;
+                metrics.total += 1;
+
                 if opts.ack {
                     stream.write(OK).map_err(|err| {
                         anyhow::anyhow!("failed to write data to the client, cause: {:?}", err)

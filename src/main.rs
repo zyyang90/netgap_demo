@@ -20,6 +20,14 @@ enum SubCommand {
     Client(ClientOpts),
 }
 
+#[derive(Debug)]
+struct Metrics {
+    total: usize,
+    success: usize,
+    failed: usize,
+    bytes: usize,
+}
+
 fn main() {
     let command = Command::parse();
 
